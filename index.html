@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Fazer outro</title>
+<style>
+  :root { --fundo: #F7F8FD; --cartao: #FFFFFF; --texto: #00073E; --apoio: #5A6577; --borda: #E1E2E6; --azul: #0062FD; --erro: #791F1F; --ok: #177245; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fundo); color: var(--texto); font: 17px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+  main { max-width: 560px; margin: 0 auto; padding: 24px 16px 48px; }
+  .marca { font-size: 12px; letter-spacing: .12em; color: var(--apoio); text-transform: uppercase; margin: 0; }
+  h1 { font-size: 26px; margin: 6px 0 4px; }
+  .post { margin: 0 0 20px; color: var(--apoio); }
+  .post b { color: var(--texto); }
+  form, .aviso { background: var(--cartao); border: 1px solid var(--borda); border-radius: 12px; padding: 20px; }
+  fieldset { border: 0; margin: 0 0 16px; padding: 0; }
+  legend { font-weight: 700; margin-bottom: 10px; }
+  .opcao { display: flex; gap: 12px; align-items: flex-start; border: 2px solid var(--borda); border-radius: 10px; padding: 14px; margin-bottom: 10px; cursor: pointer; }
+  .opcao:has(input:checked) { border-color: var(--azul); background: #F0F5FF; }
+  .opcao input { margin-top: 4px; width: 20px; height: 20px; accent-color: var(--azul); flex: none; }
+  .opcao span { display: block; color: var(--apoio); font-size: 15px; }
+  label.caixa { display: block; font-weight: 700; margin-bottom: 6px; }
+  textarea { width: 100%; min-height: 110px; border: 1px solid var(--borda); border-radius: 10px; padding: 12px; font: inherit; color: var(--texto); resize: vertical; }
+  .dica { font-size: 14px; color: var(--apoio); margin: 6px 0 18px; }
+  button { width: 100%; border: 0; border-radius: 10px; background: var(--azul); color: #fff; font: inherit; font-weight: 700; padding: 15px; cursor: pointer; }
+  button:disabled { opacity: .6; cursor: wait; }
+  .aviso.ok { border-color: var(--ok); color: var(--ok); }
+  .aviso.erro { border-color: var(--erro); color: var(--erro); }
+  .escondido { display: none; }
+</style>
+</head>
+<body>
+<main>
+  <p class="marca">Inwork · posts do Instagram</p>
+  <h1>Fazer outro</h1>
+  <p class="post" id="post">Carregando o post...</p>
+
+  <form id="form" class="escondido">
+    <fieldset>
+      <legend>O que você quer?</legend>
+      <label class="opcao"><input type="radio" name="modo" value="outra_pauta" required><div><b>Outra pauta</b><span>Outro assunto para o mesmo horário.</span></div></label>
+      <label class="opcao"><input type="radio" name="modo" value="outro_jeito"><div><b>Mesma pauta, outro jeito</b><span>Mesmo assunto, com outro título, outro ângulo e outras fotos.</span></div></label>
+    </fieldset>
+    <label class="caixa" for="texto">O que você quer diferente? (opcional)</label>
+    <textarea id="texto" maxlength="500" placeholder="Ex.: falar com o dono da empresa, título menos técnico, foto de loja"></textarea>
+    <p class="dica" id="regras"></p>
+    <button id="enviar" type="submit">Fazer outro</button>
+  </form>
+
+  <div id="aviso" class="aviso escondido" role="status"></div>
+</main>
+<script>
+  const FUNCAO = 'https://kciglulwyapjtpzslqyv.supabase.co/functions/v1/aprovar-post';
+  // O link do e-mail traz id e código depois do #, que o navegador não manda para o servidor desta página
+  const p = new URLSearchParams(location.hash.slice(1));
+  const id = p.get('id') || '', t = p.get('t') || '';
+  const $ = (x) => document.getElementById(x);
+  function avisar(texto, tipo) {
+    const a = $('aviso');
+    a.textContent = texto;
+    a.className = 'aviso ' + tipo;
+  }
+  async function carregar() {
+    if (!id || !t) { $('post').textContent = ''; return avisar('Link incompleto. Abra pelo botão FAZER OUTRO do e-mail.', 'erro'); }
+    try {
+      const r = await fetch(`${FUNCAO}?acao=info&id=${encodeURIComponent(id)}&t=${encodeURIComponent(t)}`);
+      const d = await r.json();
+      if (!d.ok) { $('post').textContent = ''; return avisar(d.mensagem || 'Link inválido.', 'erro'); }
+      $('post').innerHTML = '';
+      const b = document.createElement('b');
+      b.textContent = `Post das ${d.horario}: ${d.titulo}`;
+      $('post').append(b, document.createTextNode(d.teste ? ' (TESTE: nada será publicado)' : ''));
+      if (!d.pode) return avisar(d.motivo, 'erro');
+      $('regras').textContent = `Novas versões deste horário: ${d.refacoes} de ${d.max}. ${d.teste ? '' : `Vale até as ${d.prazo}. `}A versão atual não vai sair, e a nova chega por e-mail em alguns minutos.`;
+      $('form').classList.remove('escondido');
+    } catch (e) {
+      avisar('Não consegui abrir agora. Verifique a internet e tente de novo.', 'erro');
+    }
+  }
+  $('form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const modo = new FormData($('form')).get('modo');
+    $('enviar').disabled = true;
+    $('enviar').textContent = 'Enviando...';
+    try {
+      const r = await fetch(FUNCAO, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, t, modo, texto: $('texto').value }) });
+      const d = await r.json();
+      if (d.ok) { $('form').classList.add('escondido'); avisar(d.mensagem, 'ok'); }
+      else { avisar(d.mensagem || 'Não deu certo. Tente de novo.', 'erro'); $('enviar').disabled = false; $('enviar').textContent = 'Fazer outro'; }
+    } catch (e) {
+      avisar('Não consegui enviar. Verifique a internet e tente de novo.', 'erro');
+      $('enviar').disabled = false;
+      $('enviar').textContent = 'Fazer outro';
+    }
+  });
+  carregar();
+</script>
+</body>
+</html>
